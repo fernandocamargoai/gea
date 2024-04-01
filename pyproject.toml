@@ -9,7 +9,7 @@ python = "^3.10"
 future-shot = "^0.0.1"
 bentoml = "^1.2.9"
 sentencepiece = "^0.2.0"
-schema = "^0.7.5"
+schema = "==0.7.5"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
