@@ -1,0 +1,59 @@
+{% extends bento_base_template %}
+
+{% block SETUP_BENTO_COMPONENTS %}
+
+USER root
+
+RUN apt update && apt upgrade -y
+
+# hadolint ignore=DL3008
+RUN apt-get update -q && \
+    apt-get install -q -y --no-install-recommends \
+        bzip2 \
+        ca-certificates \
+        git \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        mercurial \
+        subversion \
+        wget
+
+ENV PATH /opt/conda/bin:$PATH
+
+# Leave these args here to better use the Docker build cache
+ARG CONDA_VERSION=py310_24.1.2-0
+ARG CONDA_MD5=7adfc2ad82f2c1731e14db72aed42c5a
+
+# Use a shell form of the RUN command to enable error handling with 'set -e'
+RUN set -e \
+    # Download Miniconda installation script
+    && wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh -O miniconda.sh \
+    # Calculate and echo the MD5 checksum of the downloaded file
+    && echo "MD5 checksum for the downloaded Miniconda installer:" \
+    && md5sum miniconda.sh || true \
+    # Check the downloaded script against the provided MD5 hash
+    && echo "${CONDA_MD5} *miniconda.sh" > miniconda.md5 \
+    && if ! md5sum --status -c miniconda.md5; then \
+        echo "MD5 checksum verification failed"; \
+        exit 1; \
+    fi \
+    # Install Miniconda
+    && mkdir -p /opt \
+    && sh miniconda.sh -b -p /opt/conda \
+    # Cleanup
+    && rm miniconda.sh miniconda.md5 \
+    # Add conda to the PATH
+    && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
+    && echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc \
+    && echo "conda activate base" >> ~/.bashrc \
+    # Remove static libraries and JavaScript map files
+    && find /opt/conda/ -follow -type f -name '*.a' -delete \
+    && find /opt/conda/ -follow -type f -name '*.js.map' -delete \
+    # Clean up conda
+    && /opt/conda/bin/conda clean -afy
+
+{{ super() }}
+
+{% endblock %}

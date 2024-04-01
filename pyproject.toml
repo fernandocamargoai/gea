@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "gea"
+version = "0.1.0"
+description = ""
+authors = ["Fernando Camargo <fernando.camargo.ai@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+future-shot = "^0.0.1"
+bentoml = "^1.2.9"
+sentencepiece = "^0.2.0"
+schema = "^0.7.5"
+
+[tool.poetry.dev-dependencies]
+pytest = "*"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

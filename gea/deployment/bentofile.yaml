@@ -1,0 +1,19 @@
+service: "gea.deployment.service:GeneticEngineeringAttributionService"
+labels:
+  owner: fernandocamargo
+  project: gea
+include:
+  - "gea/**/*.py"
+  - "gea/**/*.yaml"
+  - "gea/**/*.sh"
+python:
+  packages:
+    - torch
+    - future-shot
+    - sentencepiece
+  extra_index_url:
+    - "https://download.pytorch.org/whl/cu118"
+docker:
+  base_image: "nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04"
+  dockerfile_template: "gea/deployment/Dockerfile.template"
+  setup_script: "gea/deployment/setup.sh"
