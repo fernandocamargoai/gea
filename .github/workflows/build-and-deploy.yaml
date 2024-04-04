@@ -1,9 +1,9 @@
-name: Build Image
+name: Build and Deploy
 on:
   workflow_dispatch:
   push:
     branches:
-    - main
+      - main
 
 jobs:
   docker:
@@ -67,4 +67,11 @@ jobs:
           bento-tag: ${{ steps.bento.outputs.bento-tag }}
           push: true
           tags: fernandocamargoai/genetic_engineering_attribution_service:latest
-      
+      - uses: paperspace/deploy-action@v1.4
+        name: Deploy to Paperspace
+        id: deploy
+        env:
+          PAPERSPACE_API_KEY: ${{ secrets.PAPERSPACE_API_KEY }}
+        with:
+          projectId: ${{ secrets.PAPERSPACE_PROJECT_ID }}
+          image: fernandocamargoai/genetic_engineering_attribution_service:latest

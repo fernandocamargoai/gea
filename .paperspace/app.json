@@ -1,0 +1,23 @@
+{
+  "apiVersion": "v1",
+  "image": "fernandocamargoai/genetic_engineering_attribution_service:latest",
+  "name": "genetic_engineering_attribution_service",
+  "enabled": true,
+  "resources": {
+    "machineType": "P4000",
+    "replicas": 1,
+    "ports": [
+      3000
+    ]
+  },
+  "healthChecks": {
+    "liveness": {
+      "path": "/livez",
+      "port": 3000
+    },
+    "readiness": {
+      "path": "/readyz",
+      "port": 3000
+    }
+  }
+}
