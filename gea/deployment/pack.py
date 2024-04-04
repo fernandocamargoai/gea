@@ -41,6 +41,7 @@ if __name__ == "__main__":
         labels={"owner": "fernandocamargo", "project": "gea"},
         custom_objects={
             "preprocessing_fn": preprocessing_fn,
+            "class_index_mapping": class_index_mapping,
             "index_class_mapping": {v: k for k, v in class_index_mapping.items()},
         },
     )

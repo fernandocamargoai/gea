@@ -33,43 +33,44 @@ class FutureShotService(object):
         # We want to turn off dropout and batchnorm when running inference.
         self.model.train(False)
 
-        self.index_class_mapping: Dict[str, int] = self.model_ref.custom_objects[
+        self.preprocessing_fn: SentencePiecePreprocessing = (
+            self.model_ref.custom_objects["preprocessing_fn"]
+        )
+        self.class_index_mapping: Dict[str, int] = self.model_ref.custom_objects[
+            "class_index_mapping"
+        ]
+        self.index_class_mapping: Dict[int, str] = self.model_ref.custom_objects[
             "index_class_mapping"
         ]
 
-    @bentoml.api(
-        batchable=True, batch_dim=(0, 0), max_batch_size=32, max_latency_ms=1000
-    )
-    async def predict_scores(
-        self, input_: tuple[torch.Tensor, torch.Tensor]
-    ) -> np.ndarray:
-        sequences, metadata = input_
-        sequences = sequences.to(self.device_id)
-        metadata = metadata.to(self.device_id)
+    def _preprocess(self, inputs: list[Input]) -> dict[str, torch.Tensor]:
+        sequences = []
+        metadata = []
+        for input_ in inputs:
+            sequences.append(input_.sequence)
+            metadata.append(input_.metadata.vector())
+        batch = {"sequences": sequences, "metadata": metadata}
+        batch = self.preprocessing_fn(batch)
+        batch["sequences"] = batch["sequences"].to(self.device_id)
+        batch["metadata"] = batch["metadata"].to(self.device_id)
+
+        return batch
+
+    @bentoml.api(batchable=True, batch_dim=0, max_batch_size=32, max_latency_ms=1000)
+    async def predict_scores(self, inputs: list[Input]) -> np.ndarray:
+        batch = self._preprocess(inputs)
+
         with torch.inference_mode():
-            return (
-                self.model({"sequences": sequences, "metadata": metadata})
-                .cpu()
-                .detach()
-                .numpy()
-            )
+            return self.model(batch).cpu().detach().numpy()
 
     @bentoml.api(
         batchable=True, batch_dim=(0, 0), max_batch_size=32, max_latency_ms=1000
     )
-    async def encode(self, input_: tuple[torch.Tensor, torch.Tensor]) -> np.ndarray:
-        sequences, metadata = input_
-        sequences = sequences.to(self.device_id)
-        metadata = metadata.to(self.device_id)
+    async def encode(self, inputs: list[Input]) -> np.ndarray:
+        batch = self._preprocess(inputs)
+
         with torch.inference_mode():
-            return (
-                self.model.compute_embeddings(
-                    {"sequences": sequences, "metadata": metadata}
-                )
-                .cpu()
-                .detach()
-                .numpy()
-            )
+            return self.model.compute_embeddings(batch).cpu().detach().numpy()
 
     @bentoml.api
     async def generate_output(self, scores: np.ndarray, k: int) -> Output:
@@ -85,43 +86,32 @@ class FutureShotService(object):
 
     @bentoml.api
     async def insert_lab(self, embedding: np.ndarray, lab_id: str):
-        new_index = len(self.index_class_mapping)
+        new_index = (
+            self.class_index_mapping[lab_id]
+            if lab_id in self.class_index_mapping
+            else len(self.index_class_mapping)
+        )
         self.model.insert_class(
             new_index, torch.tensor(embedding, device=self.device_id)
         )
         self.index_class_mapping[new_index] = lab_id
+        self.class_index_mapping[lab_id] = new_index
 
 
 @bentoml.service
 class GeneticEngineeringAttributionService(object):
     future_shot_service: FutureShotService = bentoml.depends(FutureShotService)
-    model_ref = bentoml.models.get(MODEL_NAME)
-
-    def __init__(self):
-        self.preprocessing_fn: SentencePiecePreprocessing = (
-            self.model_ref.custom_objects["preprocessing_fn"]
-        )
 
     @bentoml.api
     async def predict(self, sequence: str, metadata: Metadata, k: int = 10) -> Output:
-        batch = {"sequences": [sequence], "metadata": [metadata.vector()]}
-        batch = self.preprocessing_fn(batch)
         scores = await self.future_shot_service.predict_scores(
-            (batch["sequences"], batch["metadata"])
+            [Input(sequence=sequence, metadata=metadata)]
         )
 
         return await self.future_shot_service.generate_output(scores, k)
 
     @bentoml.api
     async def new_lab(self, inputs: list[Input], lab_id: str):
-        batch = {
-            "sequences": [input_.sequence for input_ in inputs],
-            "metadata": [input_.metadata.vector() for input_ in inputs],
-        }
-        batch = self.preprocessing_fn(batch)
-
-        embeddings = await self.future_shot_service.encode(
-            (batch["sequences"], batch["metadata"])
-        )
+        embeddings = await self.future_shot_service.encode(inputs)
         lab_embedding = np.mean(embeddings, axis=0)
         await self.future_shot_service.insert_lab(lab_embedding, lab_id)
